@@ -67,7 +67,7 @@ medcontrol/
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/SEU_USUARIO/medcontrol.git
+git clone https://github.com/giovannahamu/medcontrol.git
 cd medcontrol
 
 # 2. (Opcional, mas recomendado) Crie um ambiente virtual
@@ -129,7 +129,7 @@ Saída esperada: nenhum erro de estilo ou qualidade.
 
 Veja o histórico completo em [CHANGELOG.md](CHANGELOG.md).
 
-## 👤 Autor
+## 👤 Autora
 
-**Seu Nome Completo**  
-Repositório: [https://github.com/SEU_USUARIO/medcontrol](https://github.com/SEU_USUARIO/medcontrol)
+**Giovanna Hamú Borba de Carvalho**  
+Repositório: [https://github.com/giovannahamu/medcontrol](https://github.com/giovannahamu/medcontrol)

@@ -2,14 +2,14 @@
 Testes automatizados para o MedControl.
 """
 
-import json
 import os
+
 import pytest
+
+import src.medicamentos as med_module
 
 # Garante que os testes usam um arquivo temporário
 TEST_DADOS = os.path.join(os.path.dirname(__file__), "..", "dados_teste.json")
-
-import src.medicamentos as med_module
 
 # Sobrescreve o caminho do arquivo de dados para o arquivo de teste
 med_module.ARQUIVO_DADOS = TEST_DADOS

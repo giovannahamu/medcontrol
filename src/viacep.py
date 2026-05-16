@@ -4,6 +4,7 @@ Busca informações de endereço a partir de um CEP brasileiro.
 """
 
 import re
+
 import requests
 
 API_URL = "https://viacep.com.br/ws/{cep}/json/"

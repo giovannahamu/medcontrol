@@ -5,10 +5,7 @@ Valida a comunicação com a API ViaCEP mockando as respostas HTTP.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.viacep import buscar_endereco, formatar_cep, formatar_endereco
-
 
 # ─────────────────── Testes: formatar_cep ───────────────────
 

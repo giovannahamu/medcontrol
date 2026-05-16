@@ -1,6 +1,6 @@
 #  MedControl — Controlador de Medicamentos para Idosos
 
-![CI Status](https://github.com/SEU_USUARIO/medcontrol/actions/workflows/ci.yml/badge.svg)
+![CI Status](https://github.com/giovannahamu/medcontrol/actions/workflows/ci.yml/badge.svg)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.9%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -110,7 +110,7 @@ Você verá o menu interativo:
 ## 🧪 Como Rodar os Testes
 
 ```bash
-pytest tests/ -v
+python -m pytest tests/ -v
 ```
 
 Saída esperada: todos os testes passando ✅

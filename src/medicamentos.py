@@ -104,7 +104,7 @@ def fluxo_cadastrar():
 
     try:
         med = adicionar_medicamento(nome, horarios, dose)
-        print(f"\n✅ Medicamento '{med['nome']}' cadastrado! (ID: {med['id']})")
+        print(f"\n✅ Medicamento '{med['nome']}' cadastrado com sucesso! (ID: {med['id']})")
     except ValueError as e:
         print(f"\n❌ Erro: {e}")
 
@@ -144,9 +144,23 @@ def fluxo_buscar():
         print("Nenhum medicamento encontrado.")
     else:
         for m in resultados:
+         def fluxo_buscar():
+           print("\n[ BUSCAR MEDICAMENTO ]")
+    nome = input("Digite o nome (ou parte do nome): ").strip()
+    resultados = buscar_medicamento(nome)
+    if not resultados:
+        print("Nenhum medicamento encontrado.")
+    else:
+        for m in resultados:
             horarios = ", ".join(m["horarios"])
-            print(f"\n  ID: {m['id']} | Nome: {m['nome']}")
-            print(f"  Dose: {m['dose']} | Horários: {horarios}")
+            print(
+                f"\n  ID: {m['id']} | Nome: {m['nome']} | "
+                f"Dose: {m['dose']} | Horários: {horarios}"
+            )
+            print(
+                f"\n  ID: {m['id']} | Nome: {m['nome']} | "
+                f"Dose: {m['dose']} | Horários: {horarios}"
+            )
 
 
 def fluxo_alertas():

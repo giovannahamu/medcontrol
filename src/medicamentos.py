@@ -1,11 +1,16 @@
 """
 MedControl - Controlador de Medicamentos para Idosos
-Versão: 1.0.0
+Versão: 1.1.0
 """
 
 import json
 import os
 from datetime import datetime
+
+try:
+    from src.viacep import buscar_endereco, formatar_endereco
+except ImportError:
+    from viacep import buscar_endereco, formatar_endereco
 
 ARQUIVO_DADOS = os.path.join(os.path.dirname(__file__), "..", "dados.json")
 
@@ -24,7 +29,13 @@ def salvar_dados(dados: dict) -> None:
         json.dump(dados, f, ensure_ascii=False, indent=2)
 
 
-def adicionar_medicamento(nome: str, horarios: list, dose: str) -> dict:
+def adicionar_medicamento(
+    nome: str,
+    horarios: list,
+    dose: str,
+    farmacia_cep: str = "",
+    farmacia_endereco: str = "",
+) -> dict:
     """Adiciona um novo medicamento ao controle."""
     if not nome or not nome.strip():
         raise ValueError("Nome do medicamento não pode ser vazio.")
@@ -39,6 +50,8 @@ def adicionar_medicamento(nome: str, horarios: list, dose: str) -> dict:
         "nome": nome.strip(),
         "horarios": horarios,
         "dose": dose.strip(),
+        "farmacia_cep": farmacia_cep,
+        "farmacia_endereco": farmacia_endereco,
         "criado_em": datetime.now().strftime("%d/%m/%Y %H:%M"),
     }
     dados["medicamentos"].append(medicamento)
@@ -91,6 +104,7 @@ def exibir_menu():
     print("  3. Remover medicamento")
     print("  4. Buscar medicamento")
     print("  5. Ver alertas do momento")
+    print("  6. Consultar CEP de farmácia")
     print("  0. Sair")
     print("=" * 45)
 
@@ -102,9 +116,27 @@ def fluxo_cadastrar():
     horarios_str = input("Horários (ex: 08:00,14:00,20:00): ").strip()
     horarios = [h.strip() for h in horarios_str.split(",") if h.strip()]
 
+    cep_input = input(
+        "CEP da farmácia onde compra o remédio (opcional, Enter para pular): "
+    ).strip()
+    farmacia_cep = ""
+    farmacia_endereco = ""
+
+    if cep_input:
+        print("🔍 Consultando endereço...")
+        dados_cep = buscar_endereco(cep_input)
+        if dados_cep.get("erro"):
+            print(f"⚠️  {dados_cep['erro']} O medicamento será cadastrado sem endereço.")
+        else:
+            farmacia_cep = dados_cep["cep"]
+            farmacia_endereco = formatar_endereco(dados_cep)
+            print(f"📍 Endereço encontrado: {farmacia_endereco}")
+
     try:
-        med = adicionar_medicamento(nome, horarios, dose)
-        print(f"\n✅ Medicamento '{med['nome']}' cadastrado com sucesso! (ID: {med['id']})")
+        med = adicionar_medicamento(
+            nome, horarios, dose, farmacia_cep, farmacia_endereco
+        )
+        print(f"\n✅ Medicamento '{med['nome']}' cadastrado! (ID: {med['id']})")
     except ValueError as e:
         print(f"\n❌ Erro: {e}")
 
@@ -120,6 +152,8 @@ def fluxo_listar():
         print(f"  Nome: {m['nome']}")
         print(f"  Dose: {m['dose']}")
         print(f"  Horários: {', '.join(m['horarios'])}")
+        if m.get("farmacia_endereco"):
+            print(f"  Farmácia: {m['farmacia_endereco']} (CEP: {m['farmacia_cep']})")
         print(f"  Cadastrado em: {m['criado_em']}")
         print("  " + "-" * 30)
 
@@ -144,23 +178,11 @@ def fluxo_buscar():
         print("Nenhum medicamento encontrado.")
     else:
         for m in resultados:
-         def fluxo_buscar():
-           print("\n[ BUSCAR MEDICAMENTO ]")
-    nome = input("Digite o nome (ou parte do nome): ").strip()
-    resultados = buscar_medicamento(nome)
-    if not resultados:
-        print("Nenhum medicamento encontrado.")
-    else:
-        for m in resultados:
             horarios = ", ".join(m["horarios"])
-            print(
-                f"\n  ID: {m['id']} | Nome: {m['nome']} | "
-                f"Dose: {m['dose']} | Horários: {horarios}"
-            )
-            print(
-                f"\n  ID: {m['id']} | Nome: {m['nome']} | "
-                f"Dose: {m['dose']} | Horários: {horarios}"
-            )
+            print(f"\n  ID: {m['id']} | Nome: {m['nome']}")
+            print(f"  Dose: {m['dose']} | Horários: {horarios}")
+            if m.get("farmacia_endereco"):
+                print(f"  Farmácia: {m['farmacia_endereco']}")
 
 
 def fluxo_alertas():
@@ -174,6 +196,20 @@ def fluxo_alertas():
         print("\n⚠️  Hora de tomar:")
         for m in meds:
             print(f"  💊 {m['nome']} - {m['dose']}")
+
+
+def fluxo_consultar_cep():
+    print("\n[ CONSULTAR CEP DE FARMÁCIA ]")
+    cep = input("Digite o CEP: ").strip()
+    print("🔍 Consultando...")
+    dados = buscar_endereco(cep)
+    if dados.get("erro"):
+        print(f"❌ {dados['erro']}")
+    else:
+        print(f"\n📍 CEP: {dados['cep']}")
+        print(f"   Logradouro: {dados['logradouro']}")
+        print(f"   Bairro: {dados['bairro']}")
+        print(f"   Cidade/UF: {dados['cidade']}/{dados['estado']}")
 
 
 def main():
@@ -191,6 +227,8 @@ def main():
             fluxo_buscar()
         elif opcao == "5":
             fluxo_alertas()
+        elif opcao == "6":
+            fluxo_consultar_cep()
         elif opcao == "0":
             print("\nAté logo! Cuide-se. 💙")
             break

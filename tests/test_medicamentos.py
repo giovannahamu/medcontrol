@@ -4,12 +4,14 @@ Usa mock para não depender do Supabase real durante o CI.
 """
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 
 # --------------------------------------------------------------------------- #
 #  Helpers de mock                                                              #
 # --------------------------------------------------------------------------- #
+
 
 def _make_response(data):
     """Cria um objeto de resposta fake no estilo supabase-py."""
@@ -22,10 +24,11 @@ def _mock_client(data_retornado):
     """Retorna um client Supabase mockado que devolve data_retornado."""
     client = MagicMock()
     table = client.table.return_value
-    table.insert.return_value.execute.return_value = _make_response(data_retornado)
-    table.select.return_value.order.return_value.execute.return_value = _make_response(data_retornado)
-    table.select.return_value.ilike.return_value.execute.return_value = _make_response(data_retornado)
-    table.delete.return_value.eq.return_value.execute.return_value = _make_response(data_retornado)
+    resp = _make_response(data_retornado)
+    table.insert.return_value.execute.return_value = resp
+    table.select.return_value.order.return_value.execute.return_value = resp
+    table.select.return_value.ilike.return_value.execute.return_value = resp
+    table.delete.return_value.eq.return_value.execute.return_value = resp
     return client
 
 
@@ -33,27 +36,41 @@ def _mock_client(data_retornado):
 #  Testes de cadastro                                                           #
 # --------------------------------------------------------------------------- #
 
+
 class TestCadastrarMedicamento:
     def test_cadastra_e_retorna_registro(self):
         from src.medicamentos import cadastrar_medicamento
-        registro = {"id": 1, "nome": "Losartana", "dose": "1 comprimido", "horarios": ["08:00", "20:00"]}
+
+        registro = {
+            "id": 1,
+            "nome": "Losartana",
+            "dose": "1 comprimido",
+            "horarios": ["08:00", "20:00"],
+        }
         client = _mock_client([registro])
 
         with patch("src.medicamentos.get_client", return_value=client):
-            resultado = cadastrar_medicamento("Losartana", "1 comprimido", ["08:00", "20:00"])
+            resultado = cadastrar_medicamento(
+                "Losartana", "1 comprimido", ["08:00", "20:00"]
+            )
 
         assert resultado["nome"] == "Losartana"
         assert resultado["id"] == 1
 
     def test_strip_nos_campos(self):
         from src.medicamentos import cadastrar_medicamento
-        registro = {"id": 2, "nome": "Metformina", "dose": "500mg", "horarios": ["12:00"]}
+
+        registro = {
+            "id": 2,
+            "nome": "Metformina",
+            "dose": "500mg",
+            "horarios": ["12:00"],
+        }
         client = _mock_client([registro])
 
         with patch("src.medicamentos.get_client", return_value=client):
-            resultado = cadastrar_medicamento("  Metformina  ", "  500mg  ", ["12:00"])
+            cadastrar_medicamento("  Metformina  ", "  500mg  ", ["12:00"])
 
-        # Verifica que o insert foi chamado com valores sem espaços
         call_args = client.table.return_value.insert.call_args[0][0]
         assert call_args["nome"] == "Metformina"
         assert call_args["dose"] == "500mg"
@@ -63,9 +80,11 @@ class TestCadastrarMedicamento:
 #  Testes de listagem                                                           #
 # --------------------------------------------------------------------------- #
 
+
 class TestListarMedicamentos:
     def test_retorna_lista_vazia(self):
         from src.medicamentos import listar_medicamentos
+
         client = _mock_client([])
 
         with patch("src.medicamentos.get_client", return_value=client):
@@ -75,6 +94,7 @@ class TestListarMedicamentos:
 
     def test_retorna_todos_medicamentos(self):
         from src.medicamentos import listar_medicamentos
+
         dados = [
             {"id": 1, "nome": "Atenolol", "dose": "25mg", "horarios": ["08:00"]},
             {"id": 2, "nome": "Omeprazol", "dose": "20mg", "horarios": ["07:00"]},
@@ -92,9 +112,11 @@ class TestListarMedicamentos:
 #  Testes de remoção                                                            #
 # --------------------------------------------------------------------------- #
 
+
 class TestRemoverMedicamento:
     def test_remove_existente_retorna_true(self):
         from src.medicamentos import remover_medicamento
+
         client = _mock_client([{"id": 1}])
 
         with patch("src.medicamentos.get_client", return_value=client):
@@ -104,7 +126,8 @@ class TestRemoverMedicamento:
 
     def test_nao_encontrado_retorna_false(self):
         from src.medicamentos import remover_medicamento
-        client = _mock_client([])  # nenhum registro deletado
+
+        client = _mock_client([])
 
         with patch("src.medicamentos.get_client", return_value=client):
             resultado = remover_medicamento(999)
@@ -116,9 +139,11 @@ class TestRemoverMedicamento:
 #  Testes de busca                                                              #
 # --------------------------------------------------------------------------- #
 
+
 class TestBuscarMedicamento:
     def test_busca_retorna_resultados(self):
         from src.medicamentos import buscar_medicamento
+
         dados = [{"id": 1, "nome": "Losartana", "dose": "50mg", "horarios": ["08:00"]}]
         client = _mock_client(dados)
 
@@ -130,6 +155,7 @@ class TestBuscarMedicamento:
 
     def test_busca_sem_resultado(self):
         from src.medicamentos import buscar_medicamento
+
         client = _mock_client([])
 
         with patch("src.medicamentos.get_client", return_value=client):
@@ -142,15 +168,18 @@ class TestBuscarMedicamento:
 #  Testes de alertas                                                            #
 # --------------------------------------------------------------------------- #
 
+
 class TestAlertasMomento:
     def test_alerta_quando_horario_coincide(self):
-        from src.medicamentos import alertas_momento
         from datetime import datetime
 
-        dados = [{"id": 1, "nome": "Dipirona", "dose": "1 comprimido", "horarios": ["10:00"]}]
+        from src.medicamentos import alertas_momento
+
+        dados = [
+            {"id": 1, "nome": "Dipirona", "dose": "1 comprimido", "horarios": ["10:00"]}
+        ]
         client = _mock_client(dados)
 
-        # Simula que são 10:05 — dentro da janela de ±10 min
         horario_fake = datetime(2024, 1, 1, 10, 5)
         with patch("src.medicamentos.get_client", return_value=client):
             with patch("src.medicamentos.datetime") as mock_dt:
@@ -161,13 +190,15 @@ class TestAlertasMomento:
         assert resultado[0]["nome"] == "Dipirona"
 
     def test_sem_alerta_fora_da_janela(self):
-        from src.medicamentos import alertas_momento
         from datetime import datetime
 
-        dados = [{"id": 1, "nome": "Dipirona", "dose": "1 comprimido", "horarios": ["10:00"]}]
+        from src.medicamentos import alertas_momento
+
+        dados = [
+            {"id": 1, "nome": "Dipirona", "dose": "1 comprimido", "horarios": ["10:00"]}
+        ]
         client = _mock_client(dados)
 
-        # Simula que são 15:00 — fora da janela
         horario_fake = datetime(2024, 1, 1, 15, 0)
         with patch("src.medicamentos.get_client", return_value=client):
             with patch("src.medicamentos.datetime") as mock_dt:
@@ -177,8 +208,9 @@ class TestAlertasMomento:
         assert resultado == []
 
     def test_horario_invalido_ignorado(self):
-        from src.medicamentos import alertas_momento
         from datetime import datetime
+
+        from src.medicamentos import alertas_momento
 
         dados = [{"id": 2, "nome": "Paracetamol", "dose": "500mg", "horarios": ["invalido"]}]
         client = _mock_client(dados)
@@ -196,15 +228,15 @@ class TestAlertasMomento:
 #  Teste de configuração do cliente                                             #
 # --------------------------------------------------------------------------- #
 
+
 class TestGetClient:
     def test_erro_sem_variaveis_de_ambiente(self):
-        from src.medicamentos import get_client
+        import importlib
         import os
 
+        import src.medicamentos as mod
+
         with patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_KEY": ""}):
-            # Reimporta para pegar os valores mockados
-            import importlib
-            import src.medicamentos as mod
             importlib.reload(mod)
             with pytest.raises(EnvironmentError):
                 mod.get_client()

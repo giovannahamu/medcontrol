@@ -1,122 +1,210 @@
 """
-Testes automatizados para o MedControl.
+Testes do MedControl — Etapa 3
+Usa mock para não depender do Supabase real durante o CI.
 """
 
-import os
-
+from unittest.mock import MagicMock, patch
 import pytest
 
-import src.medicamentos as med_module
 
-# Garante que os testes usam um arquivo temporário
-TEST_DADOS = os.path.join(os.path.dirname(__file__), "..", "dados_teste.json")
+# --------------------------------------------------------------------------- #
+#  Helpers de mock                                                              #
+# --------------------------------------------------------------------------- #
 
-# Sobrescreve o caminho do arquivo de dados para o arquivo de teste
-med_module.ARQUIVO_DADOS = TEST_DADOS
-
-
-def setup_function():
-    """Limpa dados antes de cada teste."""
-    if os.path.exists(TEST_DADOS):
-        os.remove(TEST_DADOS)
+def _make_response(data):
+    """Cria um objeto de resposta fake no estilo supabase-py."""
+    resp = MagicMock()
+    resp.data = data
+    return resp
 
 
-def teardown_function():
-    """Remove arquivo de teste após cada teste."""
-    if os.path.exists(TEST_DADOS):
-        os.remove(TEST_DADOS)
+def _mock_client(data_retornado):
+    """Retorna um client Supabase mockado que devolve data_retornado."""
+    client = MagicMock()
+    table = client.table.return_value
+    table.insert.return_value.execute.return_value = _make_response(data_retornado)
+    table.select.return_value.order.return_value.execute.return_value = _make_response(data_retornado)
+    table.select.return_value.ilike.return_value.execute.return_value = _make_response(data_retornado)
+    table.delete.return_value.eq.return_value.execute.return_value = _make_response(data_retornado)
+    return client
 
 
-# ─────────────────── Testes: Caminho Feliz ───────────────────
+# --------------------------------------------------------------------------- #
+#  Testes de cadastro                                                           #
+# --------------------------------------------------------------------------- #
+
+class TestCadastrarMedicamento:
+    def test_cadastra_e_retorna_registro(self):
+        from src.medicamentos import cadastrar_medicamento
+        registro = {"id": 1, "nome": "Losartana", "dose": "1 comprimido", "horarios": ["08:00", "20:00"]}
+        client = _mock_client([registro])
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = cadastrar_medicamento("Losartana", "1 comprimido", ["08:00", "20:00"])
+
+        assert resultado["nome"] == "Losartana"
+        assert resultado["id"] == 1
+
+    def test_strip_nos_campos(self):
+        from src.medicamentos import cadastrar_medicamento
+        registro = {"id": 2, "nome": "Metformina", "dose": "500mg", "horarios": ["12:00"]}
+        client = _mock_client([registro])
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = cadastrar_medicamento("  Metformina  ", "  500mg  ", ["12:00"])
+
+        # Verifica que o insert foi chamado com valores sem espaços
+        call_args = client.table.return_value.insert.call_args[0][0]
+        assert call_args["nome"] == "Metformina"
+        assert call_args["dose"] == "500mg"
 
 
-def test_adicionar_medicamento_correto():
-    """Deve adicionar um medicamento com dados válidos."""
-    med = med_module.adicionar_medicamento("Losartana", ["08:00", "20:00"], "1 comprimido")
-    assert med["nome"] == "Losartana"
-    assert med["dose"] == "1 comprimido"
-    assert "08:00" in med["horarios"]
-    assert med["id"] == 1
+# --------------------------------------------------------------------------- #
+#  Testes de listagem                                                           #
+# --------------------------------------------------------------------------- #
+
+class TestListarMedicamentos:
+    def test_retorna_lista_vazia(self):
+        from src.medicamentos import listar_medicamentos
+        client = _mock_client([])
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = listar_medicamentos()
+
+        assert resultado == []
+
+    def test_retorna_todos_medicamentos(self):
+        from src.medicamentos import listar_medicamentos
+        dados = [
+            {"id": 1, "nome": "Atenolol", "dose": "25mg", "horarios": ["08:00"]},
+            {"id": 2, "nome": "Omeprazol", "dose": "20mg", "horarios": ["07:00"]},
+        ]
+        client = _mock_client(dados)
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = listar_medicamentos()
+
+        assert len(resultado) == 2
+        assert resultado[0]["nome"] == "Atenolol"
 
 
-def test_listar_medicamentos_retorna_lista():
-    """Deve retornar lista com os medicamentos cadastrados."""
-    med_module.adicionar_medicamento("Metformina", ["07:00"], "500mg")
-    meds = med_module.listar_medicamentos()
-    assert len(meds) == 1
-    assert meds[0]["nome"] == "Metformina"
+# --------------------------------------------------------------------------- #
+#  Testes de remoção                                                            #
+# --------------------------------------------------------------------------- #
+
+class TestRemoverMedicamento:
+    def test_remove_existente_retorna_true(self):
+        from src.medicamentos import remover_medicamento
+        client = _mock_client([{"id": 1}])
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = remover_medicamento(1)
+
+        assert resultado is True
+
+    def test_nao_encontrado_retorna_false(self):
+        from src.medicamentos import remover_medicamento
+        client = _mock_client([])  # nenhum registro deletado
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = remover_medicamento(999)
+
+        assert resultado is False
 
 
-def test_buscar_medicamento_parcial():
-    """Deve encontrar medicamento por parte do nome, sem case-sensitive."""
-    med_module.adicionar_medicamento("Atenolol", ["08:00"], "25mg")
-    resultado = med_module.buscar_medicamento("ateno")
-    assert len(resultado) == 1
-    assert resultado[0]["nome"] == "Atenolol"
+# --------------------------------------------------------------------------- #
+#  Testes de busca                                                              #
+# --------------------------------------------------------------------------- #
+
+class TestBuscarMedicamento:
+    def test_busca_retorna_resultados(self):
+        from src.medicamentos import buscar_medicamento
+        dados = [{"id": 1, "nome": "Losartana", "dose": "50mg", "horarios": ["08:00"]}]
+        client = _mock_client(dados)
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = buscar_medicamento("losar")
+
+        assert len(resultado) == 1
+        assert "Losartana" in resultado[0]["nome"]
+
+    def test_busca_sem_resultado(self):
+        from src.medicamentos import buscar_medicamento
+        client = _mock_client([])
+
+        with patch("src.medicamentos.get_client", return_value=client):
+            resultado = buscar_medicamento("xpto")
+
+        assert resultado == []
 
 
-def test_remover_medicamento_existente():
-    """Deve remover medicamento pelo ID e retornar True."""
-    med = med_module.adicionar_medicamento("Omeprazol", ["07:30"], "20mg")
-    removido = med_module.remover_medicamento(med["id"])
-    assert removido is True
-    assert len(med_module.listar_medicamentos()) == 0
+# --------------------------------------------------------------------------- #
+#  Testes de alertas                                                            #
+# --------------------------------------------------------------------------- #
+
+class TestAlertasMomento:
+    def test_alerta_quando_horario_coincide(self):
+        from src.medicamentos import alertas_momento
+        from datetime import datetime
+
+        dados = [{"id": 1, "nome": "Dipirona", "dose": "1 comprimido", "horarios": ["10:00"]}]
+        client = _mock_client(dados)
+
+        # Simula que são 10:05 — dentro da janela de ±10 min
+        horario_fake = datetime(2024, 1, 1, 10, 5)
+        with patch("src.medicamentos.get_client", return_value=client):
+            with patch("src.medicamentos.datetime") as mock_dt:
+                mock_dt.now.return_value = horario_fake
+                resultado = alertas_momento()
+
+        assert len(resultado) == 1
+        assert resultado[0]["nome"] == "Dipirona"
+
+    def test_sem_alerta_fora_da_janela(self):
+        from src.medicamentos import alertas_momento
+        from datetime import datetime
+
+        dados = [{"id": 1, "nome": "Dipirona", "dose": "1 comprimido", "horarios": ["10:00"]}]
+        client = _mock_client(dados)
+
+        # Simula que são 15:00 — fora da janela
+        horario_fake = datetime(2024, 1, 1, 15, 0)
+        with patch("src.medicamentos.get_client", return_value=client):
+            with patch("src.medicamentos.datetime") as mock_dt:
+                mock_dt.now.return_value = horario_fake
+                resultado = alertas_momento()
+
+        assert resultado == []
+
+    def test_horario_invalido_ignorado(self):
+        from src.medicamentos import alertas_momento
+        from datetime import datetime
+
+        dados = [{"id": 2, "nome": "Paracetamol", "dose": "500mg", "horarios": ["invalido"]}]
+        client = _mock_client(dados)
+
+        horario_fake = datetime(2024, 1, 1, 10, 0)
+        with patch("src.medicamentos.get_client", return_value=client):
+            with patch("src.medicamentos.datetime") as mock_dt:
+                mock_dt.now.return_value = horario_fake
+                resultado = alertas_momento()
+
+        assert resultado == []
 
 
-def test_adicionar_multiplos_medicamentos():
-    """Deve suportar múltiplos medicamentos com IDs incrementais."""
-    med_module.adicionar_medicamento("Rivotril", ["22:00"], "0.5mg")
-    med_module.adicionar_medicamento("Sinvastatina", ["21:00"], "20mg")
-    meds = med_module.listar_medicamentos()
-    assert len(meds) == 2
-    assert meds[0]["id"] == 1
-    assert meds[1]["id"] == 2
+# --------------------------------------------------------------------------- #
+#  Teste de configuração do cliente                                             #
+# --------------------------------------------------------------------------- #
 
+class TestGetClient:
+    def test_erro_sem_variaveis_de_ambiente(self):
+        from src.medicamentos import get_client
+        import os
 
-# ─────────────────── Testes: Entrada Inválida ───────────────────
-
-
-def test_adicionar_nome_vazio_levanta_erro():
-    """Deve levantar ValueError ao tentar cadastrar sem nome."""
-    with pytest.raises(ValueError, match="Nome do medicamento não pode ser vazio"):
-        med_module.adicionar_medicamento("", ["08:00"], "1 comprimido")
-
-
-def test_adicionar_sem_horario_levanta_erro():
-    """Deve levantar ValueError ao tentar cadastrar sem horário."""
-    with pytest.raises(ValueError, match="Pelo menos um horário deve ser informado"):
-        med_module.adicionar_medicamento("Vitamina C", [], "1 comprimido")
-
-
-def test_adicionar_dose_vazia_levanta_erro():
-    """Deve levantar ValueError ao tentar cadastrar sem dose."""
-    with pytest.raises(ValueError, match="Dose não pode ser vazia"):
-        med_module.adicionar_medicamento("Dipirona", ["12:00"], "")
-
-
-# ─────────────────── Testes: Caso Limite ───────────────────
-
-
-def test_remover_id_inexistente_retorna_false():
-    """Deve retornar False ao tentar remover ID que não existe."""
-    resultado = med_module.remover_medicamento(9999)
-    assert resultado is False
-
-
-def test_buscar_sem_resultados():
-    """Deve retornar lista vazia ao buscar nome inexistente."""
-    resultado = med_module.buscar_medicamento("xyzabc")
-    assert resultado == []
-
-
-def test_listar_sem_medicamentos():
-    """Deve retornar lista vazia quando não há medicamentos cadastrados."""
-    meds = med_module.listar_medicamentos()
-    assert meds == []
-
-
-def test_nome_com_espacos_em_branco_eh_normalizado():
-    """Deve remover espaços em branco do início e fim do nome."""
-    med = med_module.adicionar_medicamento("  Paracetamol  ", ["08:00"], "  500mg  ")
-    assert med["nome"] == "Paracetamol"
-    assert med["dose"] == "500mg"
+        with patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_KEY": ""}):
+            # Reimporta para pegar os valores mockados
+            import importlib
+            import src.medicamentos as mod
+            importlib.reload(mod)
+            with pytest.raises(EnvironmentError):
+                mod.get_client()

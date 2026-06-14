@@ -1,88 +1,83 @@
+"""
+MedControl — Interface Web com Streamlit
+Etapa 3: dados persistidos no Supabase
+"""
+
 import streamlit as st
-from src.viacep import buscar_endereco, formatar_endereco
 from src.medicamentos import (
-    adicionar_medicamento,
+    cadastrar_medicamento,
     listar_medicamentos,
     remover_medicamento,
     buscar_medicamento,
-    verificar_horario_agora,
+    alertas_momento,
 )
 
-st.set_page_config(page_title="MedControl", page_icon="💊")
-st.title("💊 MedControl - Controle de Medicamentos")
+st.set_page_config(page_title="MedControl", page_icon="💊", layout="centered")
 
-menu = st.sidebar.selectbox("Menu", [
-    "Cadastrar Medicamento",
-    "Listar Medicamentos",
-    "Buscar Medicamento",
-    "Alertas do Momento",
-    "Consultar CEP de Farmácia",
-])
+st.title("💊 MedControl")
+st.caption("Controle de Medicamentos para Idosos — dados salvos na nuvem")
 
-if menu == "Cadastrar Medicamento":
-    st.header("Cadastrar Medicamento")
-    nome = st.text_input("Nome do medicamento")
-    dose = st.text_input("Dose (ex: 1 comprimido)")
-    horarios_str = st.text_input("Horários (ex: 08:00,20:00)")
-    cep = st.text_input("CEP da farmácia (opcional)")
+aba = st.tabs(["🏠 Início", "➕ Cadastrar", "🔍 Buscar", "🗑️ Remover"])
 
-    if st.button("Cadastrar"):
-        horarios = [h.strip() for h in horarios_str.split(",") if h.strip()]
-        farmacia_cep = ""
-        farmacia_endereco = ""
-        if cep:
-            dados = buscar_endereco(cep)
-            if not dados.get("erro"):
-                farmacia_cep = dados["cep"]
-                farmacia_endereco = formatar_endereco(dados)
-                st.success(f"📍 Endereço: {farmacia_endereco}")
-            else:
-                st.warning(dados["erro"])
-        try:
-            med = adicionar_medicamento(
-                nome, horarios, dose, farmacia_cep, farmacia_endereco
-            )
-            st.success(f"✅ '{med['nome']}' cadastrado! (ID: {med['id']})")
-        except ValueError as e:
-            st.error(str(e))
+# --- ABA INÍCIO ---
+with aba[0]:
+    st.subheader("Medicamentos Cadastrados")
+    alertas = alertas_momento()
+    if alertas:
+        st.warning(f"⚠️ {len(alertas)} medicamento(s) para tomar AGORA!")
+        for m in alertas:
+            st.error(f"💊 **{m['nome']}** — {m['dose']}")
+        st.divider()
 
-elif menu == "Listar Medicamentos":
-    st.header("Medicamentos Cadastrados")
     meds = listar_medicamentos()
     if not meds:
-        st.info("Nenhum medicamento cadastrado.")
-    for m in meds:
-        with st.expander(f"💊 {m['nome']} (ID: {m['id']})"):
-            st.write(f"**Dose:** {m['dose']}")
-            st.write(f"**Horários:** {', '.join(m['horarios'])}")
-            if m.get("farmacia_endereco"):
-                st.write(f"**Farmácia:** {m['farmacia_endereco']}")
-            st.write(f"**Cadastrado em:** {m['criado_em']}")
+        st.info("Nenhum medicamento cadastrado ainda.")
+    else:
+        for m in meds:
+            st.markdown(
+                f"**[{m['id']}] {m['nome']}** — {m['dose']}  \n"
+                f"🕐 Horários: {', '.join(m['horarios'])}"
+            )
+            st.divider()
 
-elif menu == "Buscar Medicamento":
-    st.header("Buscar Medicamento")
-    nome = st.text_input("Nome (ou parte do nome)")
-    if st.button("Buscar"):
-        resultados = buscar_medicamento(nome)
-        if not resultados:
-            st.warning("Nenhum medicamento encontrado.")
-        for m in resultados:
-            st.write(f"**{m['nome']}** — {m['dose']} | {', '.join(m['horarios'])}")
+# --- ABA CADASTRAR ---
+with aba[1]:
+    st.subheader("Cadastrar Novo Medicamento")
+    with st.form("form_cadastrar"):
+        nome = st.text_input("Nome do medicamento")
+        dose = st.text_input("Dose (ex: 1 comprimido)")
+        horarios_raw = st.text_input("Horários separados por vírgula (ex: 08:00,20:00)")
+        submitted = st.form_submit_button("Cadastrar")
 
-elif menu == "Alertas do Momento":
-    st.header("⚠️ Alertas do Momento")
-    meds = verificar_horario_agora()
-    if not meds:
-        st.success("Nenhum medicamento programado para agora.")
-    for m in meds:
-        st.warning(f"💊 {m['nome']} - {m['dose']}")
-
-elif menu == "Consultar CEP de Farmácia":
-    st.header("Consultar CEP de Farmácia")
-    cep = st.text_input("Digite o CEP")
-    if st.button("Consultar"):
-        dados = buscar_endereco(cep)
-        if dados.get("erro"):
-            st.error(dados["erro"])
+    if submitted:
+        if nome and dose and horarios_raw:
+            horarios = [h.strip() for h in horarios_raw.split(",")]
+            med = cadastrar_medicamento(nome, dose, horarios)
+            st.success(f"✅ **{med['nome']}** cadastrado com ID {med['id']}!")
         else:
-            st.success(f"📍 {formatar_endereco(dados)}")
+            st.error("Preencha todos os campos.")
+
+# --- ABA BUSCAR ---
+with aba[2]:
+    st.subheader("Buscar Medicamento")
+    termo = st.text_input("Digite o nome (ou parte do nome)")
+    if termo:
+        resultados = buscar_medicamento(termo)
+        if resultados:
+            for m in resultados:
+                st.markdown(
+                    f"**[{m['id']}] {m['nome']}** — {m['dose']}  \n"
+                    f"🕐 {', '.join(m['horarios'])}"
+                )
+        else:
+            st.warning("Nenhum resultado encontrado.")
+
+# --- ABA REMOVER ---
+with aba[3]:
+    st.subheader("Remover Medicamento")
+    med_id = st.number_input("ID do medicamento", min_value=1, step=1)
+    if st.button("Remover"):
+        if remover_medicamento(int(med_id)):
+            st.success(f"✅ Medicamento ID {int(med_id)} removido.")
+        else:
+            st.error(f"❌ ID {int(med_id)} não encontrado.")

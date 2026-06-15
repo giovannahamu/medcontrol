@@ -138,3 +138,4 @@ Veja o histórico completo em [CHANGELOG.md](CHANGELOG.md).
 
 **Giovanna Hamú Borba de Carvalho**  
 Repositório: [https://github.com/giovannahamu/medcontrol](https://github.com/giovannahamu/medcontrol)
+<!-- revisado por [GABRIEL E GIOVANA] -->
